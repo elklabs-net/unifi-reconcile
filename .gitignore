@@ -1,0 +1,11 @@
+# Read-only dumps from --dump
+dump/
+
+__pycache__/
+*.pyc
+*.egg-info/
+build/
+dist/
+.venv/
+venv/
+.env

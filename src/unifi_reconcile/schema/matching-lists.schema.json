@@ -1,0 +1,79 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/elklabs-net/unifi-reconcile/main/src/unifi_reconcile/schema/matching-lists.schema.json",
+  "title": "UniFi traffic matching list (desired state)",
+  "description": "A reusable set of ports or IP addresses referenced by firewall policies. This is the ZBF-era object -- NOT the legacy `firewallgroup` IP-group alias. The UI lists these under Settings -> Networks -> Network Lists.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["name", "type", "items"],
+  "properties": {
+    "name": { "type": "string", "minLength": 1 },
+    "type": {
+      "type": "string",
+      "enum": ["IPV4_ADDRESSES", "IPV6_ADDRESSES", "PORTS"],
+      "description": "Discriminator. Determines which item shapes are legal below."
+    },
+    "items": {
+      "type": "array",
+      "minItems": 1,
+      "description": "Port items for a PORTS list; IP items for an address list.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["type"],
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "PORT_NUMBER",
+              "PORT_NUMBER_RANGE",
+              "IP_ADDRESS",
+              "IP_ADDRESS_RANGE",
+              "SUBNET"
+            ]
+          },
+          "value": {
+            "description": "Port number for PORT_NUMBER; address or CIDR for IP_ADDRESS / SUBNET.",
+            "type": ["integer", "string"]
+          },
+          "start": { "type": ["integer", "string"] },
+          "stop": { "type": ["integer", "string"] }
+        },
+        "allOf": [
+          {
+            "if": { "properties": { "type": { "const": "PORT_NUMBER" } }, "required": ["type"] },
+            "then": {
+              "required": ["value"],
+              "properties": { "value": { "type": "integer", "minimum": 1, "maximum": 65535 } }
+            }
+          },
+          {
+            "if": { "properties": { "type": { "const": "PORT_NUMBER_RANGE" } }, "required": ["type"] },
+            "then": {
+              "required": ["start", "stop"],
+              "properties": {
+                "start": { "type": "integer", "minimum": 1, "maximum": 65535 },
+                "stop": { "type": "integer", "minimum": 1, "maximum": 65535 }
+              }
+            }
+          },
+          {
+            "if": { "properties": { "type": { "enum": ["IP_ADDRESS", "SUBNET"] } }, "required": ["type"] },
+            "then": { "required": ["value"], "properties": { "value": { "type": "string" } } }
+          },
+          {
+            "if": { "properties": { "type": { "const": "IP_ADDRESS_RANGE" } }, "required": ["type"] },
+            "then": {
+              "required": ["start", "stop"],
+              "properties": { "start": { "type": "string" }, "stop": { "type": "string" } }
+            }
+          }
+        ]
+      }
+    },
+    "_comment": {
+      "type": "string",
+      "description": "Note for a human reader. Stripped before anything reaches the console."
+    }
+  }
+}

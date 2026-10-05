@@ -1,0 +1,95 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/elklabs-net/unifi-reconcile/main/src/unifi_reconcile/schema/site.schema.json",
+  "title": "UniFi console identity and managed set (site.yaml)",
+  "description": "One per console. Editor-only: unifi-reconcile validates the per-resource files, not this one. It exists so VS Code stops applying SchemaStore's Ansible Playbook schema, which claims every file named site.yaml.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "console",
+    "managed"
+  ],
+  "properties": {
+    "console": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "base_url",
+        "api_key_env",
+        "network_version"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Label for output and pre-change captures."
+        },
+        "base_url": {
+          "type": "string",
+          "description": "Integration API base, local or via the Site Manager connector proxy. May contain {hostId}, filled from host_id."
+        },
+        "host_id": {
+          "type": "string",
+          "description": "Site Manager hostId. Required when base_url contains {hostId}."
+        },
+        "api_key_env": {
+          "type": "string",
+          "description": "Name of the environment variable holding the API key. The key itself never goes in YAML."
+        },
+        "verify_tls": {
+          "type": "boolean",
+          "default": true,
+          "description": "false only for a self-signed LAN hostname."
+        },
+        "site": {
+          "type": "string",
+          "default": "default",
+          "description": "The console's internal site reference."
+        },
+        "network_version": {
+          "type": "string",
+          "pattern": "^\\d+\\.\\d+\\.\\d+$",
+          "description": "Asserted against GET /v1/info before anything runs. Quote it, or YAML may read it as a number."
+        }
+      }
+    },
+    "managed": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Per resource type, the names this tool may write. The second signature on top of presence in the resource's YAML file.",
+      "properties": {
+        "zones": {
+          "$ref": "#/$defs/names"
+        },
+        "networks": {
+          "$ref": "#/$defs/names"
+        },
+        "matching-lists": {
+          "$ref": "#/$defs/names"
+        },
+        "policies": {
+          "$ref": "#/$defs/names"
+        },
+        "dns-policies": {
+          "$ref": "#/$defs/names"
+        },
+        "wifi": {
+          "$ref": "#/$defs/names"
+        },
+        "acl-rules": {
+          "$ref": "#/$defs/names"
+        }
+      }
+    }
+  },
+  "$defs": {
+    "names": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    }
+  }
+}

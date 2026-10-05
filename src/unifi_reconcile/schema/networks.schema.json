@@ -1,0 +1,155 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/elklabs-net/unifi-reconcile/main/src/unifi_reconcile/schema/networks.schema.json",
+  "title": "UniFi network / VLAN (desired state)",
+  "description": "A gateway-managed network. NOTE: the API has PUT but no PATCH for networks, and PUT is a full replace requiring management, name, enabled, vlanId, cellularBackupEnabled, internetAccessEnabled, isolationEnabled and ipv4Configuration. A partial body intended to set only the zone will silently drop the DHCP pool, so declare the whole object.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "name",
+    "vlanId",
+    "enabled",
+    "management"
+  ],
+  "properties": {
+    "name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "management": {
+      "type": "string",
+      "enum": [
+        "GATEWAY",
+        "SWITCH",
+        "UNMANAGED"
+      ],
+      "description": "Discriminator. Networks the gateway routes and serves DHCP for are GATEWAY."
+    },
+    "enabled": {
+      "type": "boolean"
+    },
+    "vlanId": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 4009,
+      "description": "Must be 1 for the default network. Port profiles and zone policy follow the network, not its subnet, so changing a subnet leaves them alone."
+    },
+    "zone": {
+      "type": "string",
+      "description": "Name of the firewall zone this network belongs to. Becomes zoneId. Undocumented-required on create despite being optional in the spec."
+    },
+    "isolationEnabled": {
+      "type": "boolean",
+      "description": "Isolates the network from all others. The controller derives its own 'Isolated Networks' policies from this; declare the cause here and never the derived policies."
+    },
+    "internetAccessEnabled": {
+      "type": "boolean"
+    },
+    "cellularBackupEnabled": {
+      "type": "boolean"
+    },
+    "mdnsForwardingEnabled": {
+      "type": "boolean",
+      "description": "Participation in mDNS forwarding. If null the site-level mDNS setting applies."
+    },
+    "ipv4Configuration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "hostIpAddress",
+        "prefixLength",
+        "autoScaleEnabled"
+      ],
+      "properties": {
+        "hostIpAddress": {
+          "type": "string",
+          "description": "The gateway's own address on this network."
+        },
+        "prefixLength": {
+          "type": "integer",
+          "minimum": 8,
+          "maximum": 30
+        },
+        "autoScaleEnabled": {
+          "type": "boolean"
+        },
+        "additionalHostIpSubnets": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "dhcpConfiguration": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "mode"
+          ],
+          "properties": {
+            "mode": {
+              "type": "string",
+              "enum": [
+                "SERVER",
+                "RELAY",
+                "NONE",
+                "DISABLED"
+              ]
+            },
+            "ipAddressRange": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "start",
+                "stop"
+              ],
+              "properties": {
+                "start": {
+                  "type": "string"
+                },
+                "stop": {
+                  "type": "string"
+                }
+              }
+            },
+            "leaseTimeSeconds": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "domainName": {
+              "type": "string"
+            },
+            "pingConflictDetectionEnabled": {
+              "type": "boolean",
+              "description": "Undocumented-required on create despite being optional in the spec. See go-unifi#195."
+            },
+            "dnsServerAddresses": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "gatewayIpAddress": {
+              "type": "string"
+            },
+            "ntpServerAddresses": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "tftpServerAddress": {
+              "type": "string"
+            },
+            "unifiControllerAddress": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "_comment": {
+      "type": "string",
+      "description": "Note for a human reader. Keys beginning with an underscore are stripped before anything is sent to or compared against the console."
+    }
+  }
+}

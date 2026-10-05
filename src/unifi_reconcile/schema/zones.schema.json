@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/elklabs-net/unifi-reconcile/main/src/unifi_reconcile/schema/zones.schema.json",
+  "title": "UniFi firewall zone (desired state)",
+  "description": "A firewall zone as declared in YAML. Member networks are named, not referenced by UUID -- the tool resolves them at runtime, which is what lets two sites' files be structurally identical.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "name"
+  ],
+  "properties": {
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Zone name. This is the tool's identity for the zone."
+    },
+    "networks": {
+      "type": "array",
+      "description": "Names of the networks that belong to this zone. Becomes networkIds. OPTIONAL: membership is one fact with two write paths, this list or the network's own `zone:` in networks.yaml. Declaring it in both places -- even as an empty list, which is a real assertion that the zone is empty -- makes the two files contradict each other, and the next --apply would empty the zones and silently undo segmentation. Use one or the other, never both.",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "uniqueItems": true
+    },
+    "_comment": {
+      "type": "string",
+      "description": "Note for a human reader. Keys beginning with an underscore are stripped before anything is sent to or compared against the console."
+    }
+  }
+}

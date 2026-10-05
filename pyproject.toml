@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "unifi-reconcile"
+version = "0.1.0"
+description = "Declarative config for UniFi Network consoles: diff YAML against the live console, apply exactly that diff, and verify what the API can't write."
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.9"
+dependencies = [
+    "PyYAML>=6.0",
+    "jsonschema>=4.0",
+    "requests>=2.31",
+]
+
+[project.scripts]
+unifi-reconcile = "unifi_reconcile.cli:entry"
+
+[project.urls]
+Source = "https://github.com/elklabs-net/unifi-reconcile"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+unifi_reconcile = ["schema/*.json"]

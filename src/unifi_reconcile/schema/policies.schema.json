@@ -1,0 +1,363 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/elklabs-net/unifi-reconcile/main/src/unifi_reconcile/schema/policies.schema.json",
+  "title": "UniFi firewall policy (desired state)",
+  "description": "One zone-matrix policy. Zones and matching lists are named, not UUIDs. Two things about this resource are easy to get wrong and expensive: (1) connectionStateFilter omitted means MATCH ALL STATES, so a block policy without it will drop return traffic belonging to allow policies above it -- block rules want [NEW, INVALID]; (2) protocol names must be UPPERCASE even though the spec's own enum generates lowercase (see go-unifi#195).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "name",
+    "enabled",
+    "action",
+    "source",
+    "destination"
+  ],
+  "properties": {
+    "name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "enabled": {
+      "type": "boolean"
+    },
+    "description": {
+      "type": "string",
+      "description": "A real API field on policies, unlike zones and networks."
+    },
+    "action": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type"
+      ],
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "ALLOW",
+            "BLOCK",
+            "REJECT"
+          ]
+        },
+        "allowReturnTraffic": {
+          "type": "boolean",
+          "description": "ALLOW only, and required there: the console rejects an ALLOW without it (\"action.allowReturnTraffic must not be null\"). true makes the controller derive an \"Allow Return Traffic\" policy in the mirrored zone pair. That derived policy is how return traffic survives, because the system Block All in the reverse cell has no connection-state filter and so matches ESTABLISHED too. Toward the Gateway zone it must be false: the console refuses true there (api.firewall.policy.validation.cant-allow-return-traffic), since Gateway -> X is already Allow All."
+        }
+      },
+      "if": {
+        "properties": {
+          "type": {
+            "const": "ALLOW"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "allowReturnTraffic"
+        ]
+      }
+    },
+    "source": {
+      "$ref": "#/$defs/endpoint"
+    },
+    "destination": {
+      "$ref": "#/$defs/endpoint"
+    },
+    "connectionStateFilter": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "enum": [
+          "NEW",
+          "INVALID",
+          "ESTABLISHED",
+          "RELATED"
+        ]
+      },
+      "description": "OMITTING THIS MATCHES ALL STATES. Block policies below an allow should set [NEW, INVALID]."
+    },
+    "ipProtocolScope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ipVersion"
+      ],
+      "properties": {
+        "ipVersion": {
+          "type": "string",
+          "enum": [
+            "IPV4",
+            "IPV6",
+            "IPV4_AND_IPV6"
+          ]
+        },
+        "protocolFilter": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "type"
+          ],
+          "properties": {
+            "type": {
+              "type": "string",
+              "enum": [
+                "NAMED_PROTOCOL",
+                "PRESET",
+                "PROTOCOL_NUMBER"
+              ]
+            },
+            "matchOpposite": {
+              "type": "boolean"
+            },
+            "protocol": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "name"
+              ],
+              "description": "NAMED_PROTOCOL nests the name one level down: {type: NAMED_PROTOCOL, matchOpposite: false, protocol: {name: TCP}}. A flat `name` beside `type` is rejected with api.request.unknown-property.",
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "pattern": "^[A-Z0-9_.-]+$",
+                  "description": "UPPERCASE, e.g. TCP, UDP, ICMP. The spec's enum is lowercase and the console rejects it."
+                }
+              }
+            },
+            "preset": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "name"
+              ],
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "pattern": "^[A-Z0-9_]+$"
+                }
+              }
+            },
+            "value": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 255
+            }
+          }
+        }
+      }
+    },
+    "ipsecFilter": {
+      "type": "string",
+      "enum": [
+        "MATCH_ENCRYPTED",
+        "MATCH_NOT_ENCRYPTED"
+      ]
+    },
+    "loggingEnabled": {
+      "type": "boolean"
+    },
+    "schedule": {
+      "type": "object"
+    },
+    "_comment": {
+      "type": "string"
+    },
+    "placement": {
+      "type": "string",
+      "enum": [
+        "BEFORE_SYSTEM",
+        "AFTER_SYSTEM"
+      ],
+      "default": "BEFORE_SYSTEM",
+      "description": "Which side of this zone-pair's system-defined policy the rule is evaluated on. Tool-only -- it drives the separate ordering endpoint and is never sent inside a policy body. BEFORE_SYSTEM is what makes a Block toward the Gateway effective, since that pair's system default is Allow All and a Block placed after it would be dead code."
+    }
+  },
+  "$defs": {
+    "endpoint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "zone"
+      ],
+      "description": "A policy end. `zone` is required by the API; the filters narrow within it.",
+      "properties": {
+        "zone": {
+          "type": "string",
+          "description": "Zone name. Becomes zoneId. Includes the system zones: Internal, Gateway, External, Vpn, Hotspot, Dmz."
+        },
+        "trafficFilter": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "type"
+          ],
+          "properties": {
+            "type": {
+              "type": "string",
+              "enum": [
+                "PORT",
+                "NETWORK",
+                "MAC_ADDRESS",
+                "IP_ADDRESS",
+                "IPV6_IID",
+                "REGION",
+                "VPN_SERVER",
+                "SITE_TO_SITE_VPN_TUNNEL"
+              ],
+              "description": "The console's own list, from its 400 on 10.6.106. Not the spec's: an IP filter is IP_ADDRESS, not IP, and there is no ALL -- omit trafficFilter to match the whole zone."
+            },
+            "portFilter": {
+              "$ref": "#/$defs/portFilter"
+            },
+            "ipAddressFilter": {
+              "$ref": "#/$defs/ipFilter"
+            },
+            "networkFilter": {
+              "$ref": "#/$defs/networkFilter"
+            },
+            "matchOpposite": {
+              "type": "boolean"
+            }
+          }
+        }
+      }
+    },
+    "portFilter": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "matchOpposite"
+      ],
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "PORTS",
+            "TRAFFIC_MATCHING_LIST"
+          ]
+        },
+        "matchOpposite": {
+          "type": "boolean"
+        },
+        "matchingList": {
+          "type": "string",
+          "description": "Name of a PORTS matching list. Becomes trafficMatchingListId."
+        },
+        "items": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "type"
+            ],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "PORT_NUMBER",
+                  "PORT_NUMBER_RANGE"
+                ]
+              },
+              "value": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 65535
+              },
+              "start": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 65535
+              },
+              "stop": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 65535
+              }
+            }
+          }
+        }
+      }
+    },
+    "ipFilter": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "matchOpposite"
+      ],
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "IP_ADDRESSES",
+            "TRAFFIC_MATCHING_LIST"
+          ]
+        },
+        "matchOpposite": {
+          "type": "boolean"
+        },
+        "matchingList": {
+          "type": "string",
+          "description": "Name of an IPV4_ADDRESSES matching list. Becomes trafficMatchingListId. Use it to scope a policy to a set of hosts within a zone."
+        },
+        "items": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "type"
+            ],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "IP_ADDRESS",
+                  "IP_ADDRESS_RANGE",
+                  "SUBNET"
+                ]
+              },
+              "value": {
+                "type": "string"
+              },
+              "start": {
+                "type": "string"
+              },
+              "stop": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
+    "networkFilter": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type"
+      ],
+      "properties": {
+        "type": {
+          "type": "string"
+        },
+        "matchOpposite": {
+          "type": "boolean"
+        },
+        "networks": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Network names. Becomes networkIds."
+        }
+      }
+    }
+  }
+}

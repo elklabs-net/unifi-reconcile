@@ -1,0 +1,192 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/elklabs-net/unifi-reconcile/main/src/unifi_reconcile/schema/verified.schema.json",
+  "title": "UniFi Verified tier (verified.yaml)",
+  "description": "Intended state the integration API cannot write, asserted against the legacy API by `unifi-reconcile --verify`. Read and reported, never written -- the UI is the write path for everything here. Only declared fields are compared. Keys beginning with an underscore are comments. Secret-named keys are refused before this schema runs.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "wan": {
+      "type": "array",
+      "description": "WAN interfaces by name. Not exhaustive: an undeclared WAN is not drift.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name"],
+        "properties": {
+          "name": {"type": "string"},
+          "dns_preference": {"type": "string", "enum": ["auto", "manual"]},
+          "dns1": {"type": "string"},
+          "dns2": {"type": "string"}
+        }
+      }
+    },
+    "settings": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "auto_link": {
+          "type": "boolean",
+          "description": "element_adopt.enabled. The UniFi Auto-Link SSID it creates is system-generated, invisible to rest/wlanconf, and can land on the default network (VLAN 1) unnoticed."
+        },
+        "mdns": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "mode": {"type": "string"},
+            "enabled_for": {"enum": ["all", "some"], "description": "Which networks the reflector serves. `all` leaves the network list empty; `some` means exactly `networks`."},
+            "networks": {"$ref": "#/$defs/networkNames"}
+          }
+        },
+        "ips": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "mode": {"type": "string", "description": "ips_mode: ids, ips, or disabled."},
+            "networks": {"$ref": "#/$defs/networkNames"}
+          }
+        }
+      }
+    },
+    "wifi": {
+      "type": "array",
+      "description": "EXHAUSTIVE. Every SSID the console broadcasts, by any of four views, must be listed here or it is reported as unexpected.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["ssid"],
+        "properties": {
+          "ssid": {"type": "string"},
+          "network": {"type": "string", "description": "Network name the SSID maps to. Catches an SSID that has fallen through to the default network."},
+          "enabled": {"type": "boolean"},
+          "security": {"type": "string"},
+          "wpa_mode": {"type": "string"},
+          "wpa3": {"type": "boolean"},
+          "wpa3_transition": {"type": "boolean"},
+          "pmf": {"type": "string", "enum": ["disabled", "optional", "required"]},
+          "hidden": {"type": "boolean"},
+          "fast_roaming": {"type": "boolean"},
+          "bands": {"type": "array", "items": {"type": "string", "enum": ["2g", "5g", "6g"]}}
+        }
+      }
+    },
+    "radios": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "defaults": {
+          "type": "object",
+          "description": "Per-band expectations applied to every declared access point that has that band. Keys are legacy radio names: ng (2.4 GHz), na (5 GHz), 6e (6 GHz).",
+          "additionalProperties": false,
+          "properties": {
+            "ng": {"$ref": "#/$defs/radio"},
+            "na": {"$ref": "#/$defs/radio"},
+            "6e": {"$ref": "#/$defs/radio"}
+          }
+        },
+        "access_points": {
+          "type": "array",
+          "description": "EXHAUSTIVE. An adopted AP not listed here is reported as unexpected.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["mac"],
+            "properties": {
+              "mac": {"$ref": "#/$defs/mac"},
+              "name": {"type": "string"},
+              "bands": {
+                "type": "object",
+                "description": "Per-AP overrides of the defaults.",
+                "additionalProperties": false,
+                "properties": {
+                  "ng": {"$ref": "#/$defs/radio"},
+                  "na": {"$ref": "#/$defs/radio"},
+                  "6e": {"$ref": "#/$defs/radio"}
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "ports": {
+      "type": "array",
+      "description": "Per-port overrides by device MAC and port index, read from stat/device port_overrides (no port profiles exist). Not exhaustive.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["mac", "ports"],
+        "properties": {
+          "mac": {"$ref": "#/$defs/mac"},
+          "name": {"type": "string"},
+          "ports": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["port"],
+              "properties": {
+                "port": {"type": "integer", "minimum": 1},
+                "label": {"type": "string", "description": "For the human reader; not compared."},
+                "native": {"type": "string", "description": "Native (untagged) network name."},
+                "tagged": {"type": "string", "enum": ["auto", "block_all", "custom"]},
+                "excluded": {"$ref": "#/$defs/networkNames"},
+                "forward": {"type": "string"},
+                "poe": {"type": "string"}
+              }
+            }
+          }
+        }
+      }
+    },
+    "reservations": {
+      "type": "array",
+      "description": "EXHAUSTIVE. Every client with use_fixedip on the console must be listed, or it is reported as unexpected.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["mac", "ip"],
+        "properties": {
+          "mac": {"$ref": "#/$defs/mac"},
+          "ip": {"type": "string", "format": "ipv4"},
+          "name": {"type": "string", "description": "The client alias in the UI. Compared when declared; omit for clients that have none."},
+          "label": {"type": "string", "description": "For the human reader; not compared."}
+        }
+      }
+    },
+    "static_routes": {
+      "type": "array",
+      "description": "EXHAUSTIVE. Every static route on the console must be listed, or it is reported as unexpected. Keyed by name.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "destination", "type"],
+        "properties": {
+          "name": {"type": "string", "description": "The route name in the UI; the key."},
+          "destination": {"type": "string", "pattern": "^[0-9.]+/[0-9]{1,2}$", "description": "CIDR, e.g. 192.168.100.1/32."},
+          "type": {"enum": ["next_hop", "interface", "blackhole"]},
+          "next_hop": {"type": "string", "format": "ipv4", "description": "next_hop routes only."},
+          "interface": {"type": "string", "description": "interface routes only: the WAN or network name as the UI shows it."},
+          "distance": {"type": "integer", "minimum": 1},
+          "enabled": {"type": "boolean"}
+        }
+      }
+    }
+  },
+  "$defs": {
+    "mac": {"type": "string", "pattern": "^[0-9a-fA-F]{2}(:[0-9a-fA-F]{2}){5}$"},
+    "networkNames": {"type": "array", "uniqueItems": true, "items": {"type": "string"}},
+    "radio": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "channel": {"type": ["string", "integer"]},
+        "ht": {"type": "integer", "description": "Channel width in MHz."},
+        "tx_power_mode": {"type": "string"},
+        "tx_power": {"type": ["integer", "null"]},
+        "min_rssi_enabled": {"type": "boolean"},
+        "min_rssi": {"type": ["integer", "null"]}
+      }
+    }
+  }
+}
