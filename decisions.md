@@ -227,3 +227,18 @@ than carrying a copy. Pre-change captures used to land in the tool's own
 `state/` directory, which mixed every site's captures in one place, and an
 installed package has no writable directory of its own anyway. They now
 default to `.reconcile-state/` inside `--config`; `--state-dir` overrides.
+
+## 2026-10-06 — sops is pointed at ~/.config/sops/age/keys.txt when unset
+
+sops looks for age keys in its user config directory: `~/.config` on Linux,
+`~/Library/Application Support` on macOS. A key kept at the Linux path on a Mac
+works only while `SOPS_AGE_KEY_FILE` is set, and a profile is not always read.
+Agent and IDE shells are often non-interactive and start from a desktop app's
+environment, so the variable set in a shell rc file never reaches them, and
+decryption failed there while it worked in a terminal. So when the variable is
+unset or empty and that file exists, the tool sets it for the `sops` call only,
+without changing its own environment. An explicit setting still wins, and on
+Linux the value is sops's own default, so nothing changes there. Alternatives
+considered: a key-file flag on the tool, rejected because it duplicates a
+setting sops already has; and leaving it to the user's shell setup, rejected
+because the failure only shows up in the environments that are hardest to see.

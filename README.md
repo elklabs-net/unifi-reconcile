@@ -30,7 +30,7 @@ Python 3.9 or newer.
 
 ```bash
 python3 -m venv .venv
-./.venv/bin/pip install "git+https://github.com/elklabs-net/unifi-reconcile@v0.1.0"
+./.venv/bin/pip install "git+https://github.com/elklabs-net/unifi-reconcile@v0.1.1"
 ./.venv/bin/unifi-reconcile --version
 ```
 
@@ -63,7 +63,7 @@ has to appear under `managed:`. That second signature means a typo in a name
 can't quietly create a near-duplicate firewall policy.
 
 ```yaml
-# yaml-language-server: $schema=https://raw.githubusercontent.com/elklabs-net/unifi-reconcile/v0.1.0/src/unifi_reconcile/schema/site.schema.json
+# yaml-language-server: $schema=https://raw.githubusercontent.com/elklabs-net/unifi-reconcile/v0.1.1/src/unifi_reconcile/schema/site.schema.json
 console:
   name: home-gateway
   base_url: https://192.168.1.1/proxy/network/integration/v1
@@ -129,7 +129,9 @@ Two ways to reach a console, chosen by `base_url`:
 from `--env-file`, which defaults to `secrets.sops.env` in the parent directory
 of `--config`. A file with `.sops.` in its name is decrypted in memory with
 [sops](https://github.com/getsops/sops); any other file is read as plaintext
-`KEY=VALUE`. Give each site its own variable name, so one site's key file can
+`KEY=VALUE`. If `SOPS_AGE_KEY_FILE` is unset and `~/.config/sops/age/keys.txt`
+exists, sops is pointed at that file, so a key kept at the Linux path is found
+on macOS too. Give each site its own variable name, so one site's key file can
 never satisfy another site's run.
 
 ## Use

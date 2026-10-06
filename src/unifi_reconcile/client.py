@@ -259,6 +259,23 @@ def _short(text, limit=300):
     return text if len(text) <= limit else text[:limit] + "..."
 
 
+def _sops_env():
+    """The environment for `sops decrypt`, with SOPS_AGE_KEY_FILE defaulted.
+
+    sops reads age keys from its user config directory, which is ~/.config on
+    Linux but ~/Library/Application Support on macOS. Keys kept at the Linux
+    path on a Mac are found only when SOPS_AGE_KEY_FILE says so, and a shell
+    that never read the user's profile does not have it. When the variable is
+    unset or empty and ~/.config/sops/age/keys.txt exists, point sops there.
+    An explicit setting always wins.
+    """
+    env = dict(os.environ)
+    key_file = os.path.expanduser("~/.config/sops/age/keys.txt")
+    if not env.get("SOPS_AGE_KEY_FILE") and os.path.isfile(key_file):
+        env["SOPS_AGE_KEY_FILE"] = key_file
+    return env
+
+
 def load_env_file(path):
     """Read a KEY=VALUE file over the environment, without python-dotenv.
 
@@ -270,7 +287,9 @@ def load_env_file(path):
     if not path or not os.path.exists(path):
         return env
     if ".sops." in os.path.basename(path):
-        result = subprocess.run(["sops", "decrypt", path], capture_output=True, text=True)
+        result = subprocess.run(
+            ["sops", "decrypt", path], capture_output=True, text=True, env=_sops_env()
+        )
         if result.returncode != 0:
             raise SystemExit(
                 f"sops could not decrypt {path} (is SOPS_AGE_KEY_FILE set?):\n{result.stderr}"
