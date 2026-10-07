@@ -30,7 +30,7 @@ Python 3.9 or newer.
 
 ```bash
 python3 -m venv .venv
-./.venv/bin/pip install "git+https://github.com/elklabs-net/unifi-reconcile@v0.1.1"
+./.venv/bin/pip install "git+https://github.com/elklabs-net/unifi-reconcile@v0.2.0"
 ./.venv/bin/unifi-reconcile --version
 ```
 
@@ -63,7 +63,7 @@ has to appear under `managed:`. That second signature means a typo in a name
 can't quietly create a near-duplicate firewall policy.
 
 ```yaml
-# yaml-language-server: $schema=https://raw.githubusercontent.com/elklabs-net/unifi-reconcile/v0.1.1/src/unifi_reconcile/schema/site.schema.json
+# yaml-language-server: $schema=https://raw.githubusercontent.com/elklabs-net/unifi-reconcile/v0.2.0/src/unifi_reconcile/schema/site.schema.json
 console:
   name: home-gateway
   base_url: https://192.168.1.1/proxy/network/integration/v1
@@ -181,15 +181,24 @@ the managed list.
 
 Some settings can be read but not written through the integration API:
 reservations, radio settings, switch port overrides, WAN DNS, static routes,
-Auto-Link, the site mDNS setting and IPS mode. `verified.yaml` records what they
-should be, and `--verify` reads them through the console's legacy API and
-reports drift. The UI stays the place to change them.
+Dynamic DNS, VPN servers and their WireGuard peers, Auto-Link, the site mDNS
+setting and IPS mode. `verified.yaml` records what they should be, and
+`--verify` reads them through the console's legacy API (and its v2 API, for
+WireGuard peers and zone names) and reports drift. The UI stays the place to
+change them.
 
-Four sections are exhaustive: `wifi`, `radios.access_points`, `reservations`
-and `static_routes`. Anything on the console those sections don't list is
-reported, because the drift that matters there is the object nobody declared.
+Six sections are exhaustive: `wifi`, `radios.access_points`, `reservations`,
+`static_routes`, `dynamic_dns` and `vpn_servers`, along with each server's
+`peers`. Anything on the console those sections don't list is reported,
+because the drift that matters there is the object nobody declared.
 `verified.yaml` is refused outright if it contains a secret-named key, so a
-passphrase can't be committed by mistake.
+passphrase can't be committed by mistake. A WireGuard peer's `public_key` is
+the one exception, since it is public.
+
+`resolves_to_wan: true` on a Dynamic DNS entry or a VPN server also resolves its
+hostname from wherever `--verify` runs and requires the gateway's current WAN
+address among the answers. Nothing on the console shows a Dynamic DNS client
+that stopped updating; this does.
 
 ## Things worth knowing before you rely on it
 

@@ -205,6 +205,25 @@ class Client:
                              f"({meta.get('msg')})")
         return body.get("data", [])
 
+    def v2_get(self, path, site="default"):
+        """GET a path on the console's v2 API and return the parsed body.
+
+        The v2 API sits beside the legacy one, at `.../proxy/network/v2/api/
+        site/<site>/...`, takes the same key, and answers with a bare JSON
+        list or object rather than legacy's `{meta, data}` envelope. It is the
+        only place WireGuard peers and firewall zone names can be read
+        (api-hazards.md). Read-only for the same reason as legacy_get: there
+        is deliberately no v2 write method.
+        """
+        if not self.base_url.endswith("/integration"):
+            raise UniFiError(
+                f"cannot derive the v2 API from base_url {self.base_url!r}; "
+                "expected it to end in /proxy/network/integration[/v1]"
+            )
+        root = self.base_url[: -len("/integration")]
+        return self._request("GET", f"{root}/v2/api/site/{quote(site)}/{path.lstrip('/')}",
+                             absolute=True)
+
     # ---- console identity ------------------------------------------------
 
     def application_version(self):

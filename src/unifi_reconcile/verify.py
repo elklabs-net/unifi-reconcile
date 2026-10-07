@@ -1,8 +1,9 @@
 """The Verified tier: assert intended state the integration API cannot write.
 
 Reservations, radio settings, per-port VLANs, WAN DNS forwarders, static
-routes, Auto-Link, site mDNS and IPS mode are all absent from integration v1 for writing -- most
-of them for reading too -- but readable through the legacy API. So intended
+routes, Dynamic DNS, VPN servers, Auto-Link, site mDNS and IPS mode are all absent from integration v1 for writing -- most
+of them for reading too -- but readable through the legacy API, and WireGuard
+peers through the v2 API. So intended
 state is recorded in `verified.yaml`, read back from the console, and drift is
 reported. Nothing here writes; the UI stays the write path for this tier.
 
@@ -30,6 +31,7 @@ from __future__ import annotations
 
 import json
 import os
+import socket
 
 from . import redact as redactmod
 
@@ -143,13 +145,25 @@ SOURCES = {
     "sta": "stat/sta",
     "user": "rest/user",
     "routing": "rest/routing",
+    "dynamicdns": "rest/dynamicdns",
+}
+
+#: v2 endpoints, read only when verified.yaml declares vpn_servers, so a site
+#: without one never depends on the v2 API answering.
+V2_SOURCES = {
+    "wireguard_users": "wireguard/users",
+    "zones": "firewall/zone",
 }
 
 
-def collect(client, site="default"):
-    """Fetch every legacy source once. Raw -- redact before showing any of it."""
-    return {name: client.legacy_get(path, site=site)
+def collect(client, site="default", desired=None):
+    """Fetch every source once. Raw -- redact before showing any of it."""
+    live = {name: client.legacy_get(path, site=site)
             for name, path in SOURCES.items()}
+    wanted = desired is None or "vpn_servers" in desired
+    for name, path in V2_SOURCES.items():
+        live[name] = (client.v2_get(path, site=site) or []) if wanted else []
+    return live
 
 
 # ---- comparison --------------------------------------------------------------
@@ -166,6 +180,8 @@ def check(desired, live):
         ("ports", _check_ports),
         ("reservations", _check_reservations),
         ("static_routes", _check_static_routes),
+        ("dynamic_dns", _check_dynamic_dns),
+        ("vpn_servers", _check_vpn_servers),
     ):
         if section in desired:
             findings.extend(fn(desired[section], ctx))
@@ -178,6 +194,18 @@ class _Context:
         self.net_name = {n["_id"]: n.get("name") for n in live["networkconf"]}
         self.net_id = {v: k for k, v in self.net_name.items()}
         self.settings = {s.get("key"): s for s in live["setting"]}
+        # A WAN is "wan" or "wan2" in Dynamic DNS and VPN records, "WAN" or
+        # "WAN2" as a network's group, and "wan1"/"wan2" on the gateway device.
+        self.wan_name = {str(n.get("wan_networkgroup", "")).lower(): n.get("name")
+                         for n in live["networkconf"] if n.get("purpose") == "wan"}
+        gateways = [d for d in live["device"] if d.get("type") in ("udm", "ugw", "uxg")]
+        self.gateway = gateways[0] if gateways else {}
+        self.zone_name = {z.get("_id"): z.get("name") for z in live.get("zones") or []}
+
+    def wan_ip(self, interface):
+        """The gateway's current address on a WAN, by its Dynamic DNS/VPN name."""
+        key = {"wan": "wan1"}.get(interface, interface)
+        return (self.gateway.get(key) or {}).get("ip")
 
     def names(self, ids):
         return [self.net_name.get(i, f"<unknown network {i}>") for i in ids or []]
@@ -494,6 +522,127 @@ def _check_static_routes(declared, ctx):
     return out
 
 
+def _resolve_ipv4(host):
+    try:
+        return sorted({a[4][0] for a in socket.getaddrinfo(host, None, socket.AF_INET)})
+    except (socket.gaierror, UnicodeError):
+        return []
+
+
+#: Module-level so a test can swap in a resolver that needs no network.
+resolve_ipv4 = _resolve_ipv4
+
+
+def _check_resolves(section, identity, host, interface, ctx):
+    """`resolves_to_wan`: the name a client is given answers with the address
+    the gateway holds right now. This is the drift a Dynamic DNS client that
+    quietly stopped updating produces, and nothing on the console shows it.
+    It asks this machine's resolver, so it reads what clients would see from
+    wherever --verify runs."""
+    want = ctx.wan_ip(interface)
+    if not want:
+        return [Finding(section, identity, CHANGED, "resolves_to", "the WAN address",
+                        None, note=f"the gateway reports no address on {interface!r}")]
+    have = resolve_ipv4(host) if host else []
+    if want in have:
+        return []
+    return [Finding(section, identity, CHANGED, "resolves_to", want,
+                    have or f"{host or 'no hostname'} does not resolve")]
+
+
+def _check_dynamic_dns(declared, ctx):
+    """Keyed by hostname, and exhaustive: an extra Dynamic DNS entry publishes
+    the house's address under a name nobody declared."""
+    out = []
+    live = {d.get("host_name"): d for d in ctx.live["dynamicdns"]}
+    listed = set()
+    for entry in declared:
+        host = entry["hostname"]
+        listed.add(host)
+        d = live.get(host)
+        if d is None:
+            out.append(Finding("dynamic_dns", host, MISSING,
+                               note="no Dynamic DNS entry for this hostname"))
+            continue
+        have = {"service": d.get("service"),
+                "wan": ctx.wan_name.get(d.get("interface"), d.get("interface")),
+                "server": d.get("server"),
+                "login": d.get("login")}
+        out += _compare("dynamic_dns", host, {k: entry[k] for k in have if k in entry}, have)
+        if entry.get("resolves_to_wan"):
+            out += _check_resolves("dynamic_dns", host, host, d.get("interface"), ctx)
+    for host, d in sorted(live.items(), key=lambda kv: kv[0] or ""):
+        if host not in listed:
+            out.append(Finding("dynamic_dns", host or "<no hostname>", UNEXPECTED,
+                               note=f"{d.get('service')} entry on the console, not declared"))
+    return out
+
+
+#: Legacy vpn_type -> the type verified.yaml declares.
+VPN_TYPES = {"wireguard-server": "wireguard", "openvpn-server": "openvpn",
+             "l2tp-server": "l2tp", "pptp-server": "pptp"}
+
+
+def _check_vpn_servers(declared, ctx):
+    """Keyed by name, and exhaustive, as are each server's peers: the drift
+    that matters is a way in, or a phone, that nobody declared. Teleport is not
+    a VPN server network and does not appear here. `wan`, `client_address` and
+    `peers` are read from WireGuard's fields; other types leave them unset."""
+    out = []
+    live = {n.get("name"): n for n in ctx.live["networkconf"]
+            if n.get("purpose") == "remote-user-vpn"}
+    listed = set()
+    for server in declared:
+        name = server["name"]
+        listed.add(name)
+        n = live.get(name)
+        if n is None:
+            out.append(Finding("vpn_servers", name, MISSING,
+                               note="no VPN server with this name"))
+            continue
+        iface = n.get("wireguard_interface")
+        override = (n.get("vpn_client_configuration_remote_ip_override")
+                    if n.get("vpn_client_configuration_remote_ip_override_enabled") else None)
+        have = {"type": VPN_TYPES.get(n.get("vpn_type"), n.get("vpn_type")),
+                "enabled": n.get("enabled"),
+                "subnet": n.get("ip_subnet"),
+                "port": n.get("local_port"),
+                "wan": ctx.wan_name.get(iface, iface),
+                "zone": ctx.zone_name.get(n.get("firewall_zone_id"), n.get("firewall_zone_id")),
+                "client_address": override}
+        out += _compare("vpn_servers", name, {k: server[k] for k in have if k in server}, have)
+        if server.get("resolves_to_wan"):
+            out += _check_resolves("vpn_servers", name, override, iface, ctx)
+        if "peers" in server:
+            out += _check_peers(name, server["peers"], n.get("_id"), ctx)
+    for name, n in sorted(live.items(), key=lambda kv: kv[0] or ""):
+        if name not in listed:
+            out.append(Finding("vpn_servers", name or "<unnamed>", UNEXPECTED,
+                               note=f"{n.get('vpn_type')} on {n.get('ip_subnet')}, not declared"))
+    return out
+
+
+def _check_peers(server_name, declared, network_id, ctx):
+    out = []
+    live = {u.get("name"): u for u in ctx.live["wireguard_users"]
+            if u.get("network_id") == network_id}
+    listed = set()
+    for peer in declared:
+        ident = f"{server_name} / {peer['name']}"
+        listed.add(peer["name"])
+        u = live.get(peer["name"])
+        if u is None:
+            out.append(Finding("vpn_servers", ident, MISSING, note="no such peer"))
+            continue
+        have = {"ip": u.get("interface_ip"), "public_key": u.get("public_key")}
+        out += _compare("vpn_servers", ident, {k: peer[k] for k in have if k in peer}, have)
+    for name, u in sorted(live.items(), key=lambda kv: kv[0] or ""):
+        if name not in listed:
+            out.append(Finding("vpn_servers", f"{server_name} / {name}", UNEXPECTED,
+                               note=f"peer at {u.get('interface_ip')}, not declared"))
+    return out
+
+
 def _ip_key(ip):
     try:
         return tuple(int(p) for p in (ip or "").split("."))
@@ -512,7 +661,7 @@ def render(findings, desired, site_name, version, color=True):
 
     lines = [f"verify {site_name}  (Network {version})", ""]
     for section in ("wan", "settings", "wifi", "radios", "ports", "reservations",
-                    "static_routes"):
+                    "static_routes", "dynamic_dns", "vpn_servers"):
         if section not in desired:
             continue
         mine = [f for f in findings if f.section == section]

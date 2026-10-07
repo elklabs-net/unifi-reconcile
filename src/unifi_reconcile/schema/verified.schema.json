@@ -171,6 +171,57 @@
           "enabled": {"type": "boolean"}
         }
       }
+    },
+    "dynamic_dns": {
+      "type": "array",
+      "description": "EXHAUSTIVE. Every Dynamic DNS entry on the console must be listed, or it is reported as unexpected. Keyed by hostname. The password is never declared.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["hostname"],
+        "properties": {
+          "hostname": {"type": "string", "description": "The name the console keeps updated; the key."},
+          "service": {"type": "string", "description": "The provider as the console stores it, e.g. afraid, dyndns, cloudflare."},
+          "wan": {"type": "string", "description": "The WAN whose address is published, by the name the UI shows, e.g. Internet 1."},
+          "server": {"type": "string", "description": "Custom provider server. Empty for a listed provider."},
+          "login": {"type": "string", "description": "The provider account's username."},
+          "resolves_to_wan": {"type": "boolean", "description": "Also resolve the hostname from where --verify runs and require that WAN's current address among the answers. Catches a client that stopped updating."}
+        }
+      }
+    },
+    "vpn_servers": {
+      "type": "array",
+      "description": "EXHAUSTIVE. Every VPN server network on the console must be listed, or it is reported as unexpected. Keyed by name. Teleport is not a VPN server network and is not listed. Keys are never declared, except peers' public keys.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name"],
+        "properties": {
+          "name": {"type": "string", "description": "The server name in the UI; the key."},
+          "type": {"enum": ["wireguard", "openvpn", "l2tp", "pptp"]},
+          "enabled": {"type": "boolean"},
+          "subnet": {"type": "string", "pattern": "^[0-9.]+/[0-9]{1,2}$", "description": "The gateway's address in the client range, as the UI shows it, e.g. 192.168.247.1/24."},
+          "port": {"type": "integer", "minimum": 1, "maximum": 65535},
+          "wan": {"type": "string", "description": "WireGuard: the WAN it listens on, e.g. Internet 1."},
+          "zone": {"type": "string", "description": "The firewall zone its clients are in, e.g. Vpn."},
+          "client_address": {"type": ["string", "null"], "description": "WireGuard: the Alternate Address for Clients written into their configuration. null when unset, so clients get the WAN address."},
+          "resolves_to_wan": {"type": "boolean", "description": "Also resolve client_address from where --verify runs and require the listening WAN's current address among the answers."},
+          "peers": {
+            "type": "array",
+            "description": "WireGuard. EXHAUSTIVE when present: every peer of this server must be listed. Keyed by name.",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["name"],
+              "properties": {
+                "name": {"type": "string"},
+                "ip": {"type": "string", "format": "ipv4"},
+                "public_key": {"type": "string", "pattern": "^[A-Za-z0-9+/]{43}=$", "description": "The peer's WireGuard public key. Public by design; a change means the peer was recreated."}
+              }
+            }
+          }
+        }
+      }
     }
   },
   "$defs": {

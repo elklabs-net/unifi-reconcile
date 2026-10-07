@@ -242,3 +242,23 @@ Linux the value is sops's own default, so nothing changes there. Alternatives
 considered: a key-file flag on the tool, rejected because it duplicates a
 setting sops already has; and leaving it to the user's shell setup, rejected
 because the failure only shows up in the environments that are hardest to see.
+
+## 2026-10-06 — Dynamic DNS and VPN servers are verified, not managed
+
+Neither can be written through integration v1, so both join the Verified tier
+rather than the Managed one. Legacy writes were considered and rejected for the
+reason the client has no legacy write method: full-record replaces with no
+schema, on records that carry the DDNS password and the server's private key.
+
+Two reads go beyond the legacy API. WireGuard peers and firewall zone names
+exist only in the console's v2 API, so the client gained a read-only `v2_get`,
+called only when `vpn_servers` is declared. And `resolves_to_wan` does a DNS
+lookup, the tool's first read of anything but the console: a DDNS client that
+stops updating leaves the console looking correct, and the only evidence is
+the name answering with an old address. The lookup uses the resolver of the
+machine running `--verify`, which is what a phone would ask too.
+
+Peers are exhaustive and keyed by name, with the public key compared. A new
+key under an old name means the peer was recreated, and an undeclared peer is
+an unreviewed way in. Public keys are not secret, so `public_key` joins
+redaction's allow list.

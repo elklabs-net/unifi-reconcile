@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "unifi-reconcile"
-version = "0.1.1"
+version = "0.2.0"
 description = "Declarative config for UniFi Network consoles: diff YAML against the live console, apply exactly that diff, and verify what the API can't write."
 readme = "README.md"
 license = { file = "LICENSE" }

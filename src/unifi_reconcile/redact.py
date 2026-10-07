@@ -56,6 +56,7 @@ ALLOW = {
     "group_rekey",                # a rekey interval in seconds
     "networkid", "networkids",
     "zoneid", "zoneids",
+    "public_key",                 # a WireGuard peer's public half; comparing it is the point
 }
 
 PLACEHOLDER = "<redacted>"

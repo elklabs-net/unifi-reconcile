@@ -168,6 +168,40 @@ and no PSK, but `wifi/broadcasts/{id}` returns
 `securityConfiguration.passphrase` in cleartext. Redaction is by field name,
 not by endpoint, for this reason.
 
+### VPN servers are a name and a flag in integration v1
+
+Last seen: 10.6.106 · Handled in: `verify._check_vpn_servers`
+
+`GET /v1/sites/{siteId}/vpn/servers` lists each server with `id`, `name`,
+`type` and `enabled` only, and has no write methods. The subnet, port, WAN and
+the Alternate Address for Clients are in legacy `rest/networkconf`, on the
+server's network: `purpose: remote-user-vpn`, `vpn_type: wireguard-server`,
+`ip_subnet`, `local_port`, `wireguard_interface`, and
+`vpn_client_configuration_remote_ip_override` with its `_enabled` flag. The
+same record carries `x_wireguard_private_key`, which redaction hides by name.
+Teleport is in neither list.
+
+### WireGuard peers are only in the v2 API
+
+Last seen: 10.6.106 · Handled in: `Client.v2_get`, `verify.V2_SOURCES`
+
+Peers are at `/proxy/network/v2/api/site/{site}/wireguard/users` (every
+server's) and `.../wireguard/{networkId}/users`, each with `name`,
+`interface_ip`, `public_key` and `network_id`. They are in neither integration
+v1 nor legacy `rest/`; `rest/wireguard` is a 400. Firewall zone names are in
+v2 too, at `firewall/zone`: legacy records hold a zone's 24-hex `_id`, which
+integration v1's zone UUIDs do not match. The v2 API answers with a bare list,
+not legacy's `{meta, data}` envelope.
+
+### A WAN has three names
+
+Last seen: 10.6.106 · Handled in: `verify._Context`
+
+Dynamic DNS and VPN records say `wan` or `wan2`. The WAN's network says
+`wan_networkgroup: WAN` or `WAN2` and carries the name the UI shows
+(`Internet 1`). The gateway in `stat/device` reports the live address under
+`wan1` or `wan2`. verified.yaml uses the UI name throughout.
+
 ### Client groups are invisible to both APIs this tool reads
 
 Last seen: 10.6.106 · Handled in: nothing; a trap when reading the UI

@@ -336,7 +336,8 @@ def run_verify(args):
             pinned, allow_mismatch=args.allow_version_mismatch)
             if pinned else client.application_version())
 
-        live = verifymod.collect(client, site=console.get("site", "default"))
+        live = verifymod.collect(client, site=console.get("site", "default"),
+                                 desired=desired)
         if args.dump:
             dump(args.dump, live, site_cfg, version, console.get("site", "default"))
         findings = verifymod.check(desired, live)
