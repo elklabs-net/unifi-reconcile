@@ -158,6 +158,10 @@
     "loggingEnabled": {
       "type": "boolean"
     },
+    "reportFlowEnabled": {
+      "type": "boolean",
+      "description": "Whether traffic this policy matches is reported in the console's flow log, under the policy's name. Network 11.0 and later; the console sets it true when a create leaves it out. Omit it to leave the console's value alone."
+    },
     "schedule": {
       "type": "object"
     },

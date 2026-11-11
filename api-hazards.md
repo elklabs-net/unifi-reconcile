@@ -1,16 +1,19 @@
 # UniFi API hazards
 
-Where the console differs from Ubiquiti's published OpenAPI spec (10.4.57 at the
-time of writing; it is Ubiquiti's to publish, so it is not copied here), or from
-what a careful client would assume. Each one is either handled in code or
-is a trap to know about when writing desired state.
+Where the console differs from Ubiquiti's OpenAPI spec for the Network API, or
+from what a careful client would assume. Each one is either handled in code or
+is a trap to know about when writing desired state. The spec is not copied here.
+Ubiquiti publishes only the current version, and
+[beezly/unifi-apis](https://github.com/beezly/unifi-apis) archives every
+release's, extracted from consoles.
 
 `Last seen:` is the newest Network version the hazard was observed on. It is a
 record of evidence, not a claim that the hazard is gone on later versions. Most
 of these only show on a write, so a tag stays put until an `--apply` exercises
-the hazard again.
+the hazard again. A hazard about which methods or fields exist can also move on
+the spec, and says so.
 
-Last reviewed against: Network **10.6.106**.
+Last reviewed against: Network **11.0.99**.
 
 Several were first documented in
 [go-unifi#195](https://github.com/filipowm/go-unifi/issues/195), against the
@@ -19,18 +22,23 @@ same version.
 ## When a console's version changes
 
 `site.yaml` pins `network_version`, and the tool refuses to run against a
-console reporting anything else. That refusal is the only thing that says
-whether the behavior below still holds, because Ubiquiti publishes one spec
-version at a time and there is no per-release snapshot to pin.
+console reporting anything else. The spec says what the API claims to be. Only
+the console says how it behaves, and most of this file is the difference.
 
-1. Dry-run with `--allow-version-mismatch` and read the diff. A read-side
+1. Diff the two versions' specs from
+   [beezly/unifi-apis](https://github.com/beezly/unifi-apis/tree/main/unifi-network):
+   operations added or removed, and per schema the properties, `required` lists
+   and enums. A new field on a managed type is the one to read closely. A full
+   replace PUT carries it over from the GET, but a create does not send it, so
+   the console's default applies until the schema here can declare it.
+2. Dry-run with `--allow-version-mismatch` and read the diff. A read-side
    hazard that changed shows up here as unexpected drift.
-2. Run `--verify`. That covers the legacy reads: hidden WLANs, the mDNS site
+3. Run `--verify`. That covers the legacy reads: hidden WLANs, the mDNS site
    setting.
-3. Walk this file. Bump `Last seen:` on anything the runs confirmed. Delete an
-   entry that no longer holds, and the workaround with it; git keeps the
-   history.
-4. Move the pin in `site.yaml` in the same commit.
+4. Walk this file. Bump `Last seen:` on anything the runs or the spec confirmed.
+   Delete an entry that no longer holds, and the workaround with it; git keeps
+   the history.
+5. Move the pin in `site.yaml` in the same commit.
 
 Each console upgrades on its own schedule, so each site's pin is a separate
 fact.
@@ -56,10 +64,11 @@ PUT requires `cellularBackupEnabled`, `enabled`, `internetAccessEnabled`,
 meant to set only `zoneId` silently drops the DHCP pool. Declare networks
 whole.
 
-### Policies have PATCH, but it only takes `loggingEnabled`
+### Policies have PATCH, but it only takes two flags
 
-Last seen: 10.6.106 · Handled in: `resources.py` (`patchable=False`)
+Last seen: 11.0.99 (spec; the 400 itself on 10.6.106) · Handled in: `resources.py` (`patchable=False`)
 
+The PATCH body is `loggingEnabled` and, from Network 11.0, `reportFlowEnabled`.
 Sending any other field, `name` included, is a 400 `unknown-property`.
 Policies are updated like networks: GET, sanitize, merge, full-replace PUT.
 
@@ -72,7 +81,7 @@ though the spec marks both optional.
 
 ### A network PUT rewrites the site mDNS setting
 
-Last seen: 10.6.106 · Handled in: `verify.py` (asserted, not written)
+Last seen: 11.0.99 · Handled in: `verify.py` (asserted, not written)
 
 The reflector's scope is stored twice: per network (`mdnsForwardingEnabled` in
 integration v1, `mdns_enabled` in legacy `networkconf`) and site-wide
@@ -88,6 +97,10 @@ pre-change capture sees it. Only `--verify` does, which is why the site setting
 is asserted there as `enabled_for` rather than as a network list: `all` stores
 an empty list. Whether `mdnsForwardingEnabled: false` on a PUT removes a network
 from the list is untested.
+
+Putting it back is a UI change. On 11.0.99 the legacy `get/setting` write for
+`mdns` is accepted and changes nothing. In the Network 11 UI, `all` is
+Settings → Networks → **Gateway mDNS Proxy → Auto**.
 
 The console's Admin Activity log records each change as `actor: UNKNOWN` in the
 same second as the PUT. It is
@@ -136,7 +149,7 @@ An IP filter is `IP_ADDRESS`, not `IP`. The 400 enumerates the valid set:
 
 ### The networks collection is a projection
 
-Last seen: 10.6.106 · Handled in: `Resource.detail_get`
+Last seen: 11.0.99 · Handled in: `Resource.detail_get`
 
 `GET .../networks` omits `ipv4Configuration`, `isolationEnabled`,
 `internetAccessEnabled` and the DHCP block. Networks are fetched again per
@@ -161,7 +174,7 @@ firmware upgrades.
 
 ### A single-object GET can return a secret the collection does not
 
-Last seen: 10.6.106 · Handled in: `redact.py`
+Last seen: 11.0.99 · Handled in: `redact.py`
 
 The `wifi/broadcasts` collection returns `securityConfiguration: {type: ...}`
 and no PSK, but `wifi/broadcasts/{id}` returns
@@ -183,15 +196,18 @@ Teleport is in neither list.
 
 ### WireGuard peers are only in the v2 API
 
-Last seen: 10.6.106 · Handled in: `Client.v2_get`, `verify.V2_SOURCES`
+Last seen: 11.0.99 · Handled in: `Client.v2_get`, `verify.V2_SOURCES`
 
 Peers are at `/proxy/network/v2/api/site/{site}/wireguard/users` (every
 server's) and `.../wireguard/{networkId}/users`, each with `name`,
 `interface_ip`, `public_key` and `network_id`. They are in neither integration
 v1 nor legacy `rest/`; `rest/wireguard` is a 400. Firewall zone names are in
-v2 too, at `firewall/zone`: legacy records hold a zone's 24-hex `_id`, which
-integration v1's zone UUIDs do not match. The v2 API answers with a bare list,
-not legacy's `{meta, data}` envelope.
+v2 too, at `firewall/zone`: legacy records hold the zone's v2 `_id`, which
+integration v1's zone UUIDs do not match. That `_id` was 24 hex digits through
+10.6 and is a 36-character UUID from 11.0, still a different value from the
+integration v1 id for the same zone. The lookup is by equality, so nothing
+depends on the shape. The v2 API answers with a bare list, not legacy's
+`{meta, data}` envelope.
 
 ### A WAN has three names
 

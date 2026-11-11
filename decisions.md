@@ -77,6 +77,13 @@ material only; the guard that actually holds is comparing `GET /v1/info` to the
 *Revised 2026-10-05: the spec is no longer kept in the repository. It is
 Ubiquiti's document to publish, and nothing in the code reads it.*
 
+*Revised 2026-11-11: per-release snapshots do exist, just not from Ubiquiti.
+[beezly/unifi-apis](https://github.com/beezly/unifi-apis) extracts the spec from
+consoles for every Network release, and its 10.4.57 is identical to the copy
+Ubiquiti published. The runtime assertion stays the guard. Diffing the old and
+new versions' specs is now the first step in moving a pin (see api-hazards.md),
+and is how Network 11.0's `reportFlowEnabled` was found.*
+
 ## 2026-09-17 — Base URL tolerates a trailing `/v1`
 
 Ubiquiti documents the base URL ending in `/integration/v1`, while paths in this

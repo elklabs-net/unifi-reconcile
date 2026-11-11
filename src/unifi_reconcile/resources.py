@@ -213,8 +213,9 @@ _register(
         "policies",
         "firewall/policies",
         ordered=True,
-        # PATCH exists but its body is {loggingEnabled} and nothing else --
-        # sending `name` is a 400. Any real update is a full-replace PUT.
+        # PATCH exists but takes only the two flags, loggingEnabled and (from
+        # Network 11.0) reportFlowEnabled -- sending `name` is a 400. Any real
+        # update is a full-replace PUT.
         patchable=False,
         # `items` covers address and port filter lists, which are sets: the
         # controller stores ["224.0.0.251", "ff02::fb"] back IPv6-first.
