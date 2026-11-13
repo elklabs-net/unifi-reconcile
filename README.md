@@ -30,7 +30,7 @@ Python 3.9 or newer.
 
 ```bash
 python3 -m venv .venv
-./.venv/bin/pip install "git+https://github.com/elklabs-net/unifi-reconcile@v0.3.0"
+./.venv/bin/pip install "git+https://github.com/elklabs-net/unifi-reconcile@v0.3.1"
 ./.venv/bin/unifi-reconcile --version
 ```
 
@@ -63,7 +63,7 @@ has to appear under `managed:`. That second signature means a typo in a name
 can't quietly create a near-duplicate firewall policy.
 
 ```yaml
-# yaml-language-server: $schema=https://raw.githubusercontent.com/elklabs-net/unifi-reconcile/v0.3.0/src/unifi_reconcile/schema/site.schema.json
+# yaml-language-server: $schema=https://raw.githubusercontent.com/elklabs-net/unifi-reconcile/v0.3.1/src/unifi_reconcile/schema/site.schema.json
 console:
   name: home-gateway
   base_url: https://192.168.1.1/proxy/network/integration/v1
