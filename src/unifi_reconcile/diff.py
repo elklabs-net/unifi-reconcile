@@ -22,6 +22,8 @@ from __future__ import annotations
 
 import json
 
+from . import sanitize
+
 CREATE = "create"
 UPDATE = "update"
 ORPHAN = "orphan"
@@ -265,6 +267,16 @@ def render(plan, color=True, show_unmanaged=True, show_undeclared=False):
                         + c(_fmt(have, path), "red")
                         + " -> "
                         + c(_fmt(want, path), "green")
+                    )
+                # A PUT replaces the object; PATCH sends only what's declared.
+                drops = ([] if rd.resource.patchable else
+                         sanitize.type_change_drops(obj.actual, obj.desired))
+                for path, have in drops:
+                    out.append(
+                        f"        {path}: "
+                        + c(_fmt(have, path), "red")
+                        + " -> "
+                        + c("(dropped: its object changes type)", "dim")
                     )
             elif obj.kind == ORPHAN:
                 note = ("in the managed set but absent from YAML; "

@@ -55,6 +55,18 @@ A GET body carries fields the API rejects on write.
 sanitize, merge, PUT: server-owned keys are stripped and empty strings dropped
 from string lists.
 
+### A change of `type` cannot carry the old type's fields
+
+Last seen: 11.0.99 · Handled in: `sanitize.for_write`, `diff.render`
+
+DNS policies, traffic filters and Wi-Fi security are discriminated on `type`,
+and each type has its own fields. Merging the desired object over the live one
+keeps the old type's: an `A_RECORD` turned `CNAME_RECORD` sent `ipv4Address`
+beside `targetDomain`, and the console refused the whole PUT with a 400,
+`api.request.unknown-property`. Wherever `type` changes, at any depth, the
+desired object replaces the live one whole, and the dry run lists each field it
+leaves behind as dropped. Declare everything the new type requires.
+
 ### Networks have PUT and no PATCH, and PUT is a full replace
 
 Last seen: 10.6.106 · Handled in: `sanitize.for_write`, `apply.py`

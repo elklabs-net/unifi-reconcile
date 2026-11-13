@@ -269,3 +269,21 @@ Peers are exhaustive and keyed by name, with the public key compared. A new
 key under an old name means the peer was recreated, and an undeclared peer is
 an unreviewed way in. Public keys are not secret, so `public_key` joins
 redaction's allow list.
+
+## 2026-11-13 — A change of `type` replaces the object instead of merging
+
+Updates merge the desired fields over the live object, so a partial YAML
+leaves everything it doesn't mention alone. That rule broke on the first change
+of a DNS policy's type: the merged body kept `ipv4Address` from the A record,
+and the console refused the CNAME. Now, wherever the desired and live objects
+both have a `type` and the values differ, at any depth, the desired object is
+sent whole, and the dry run shows the live fields that go with it.
+
+Alternatives considered: dropping only the fields the new type's schema lacks,
+rejected because the tool ships no OpenAPI spec and a per-type field list is
+the shadow copy of the controller the diff rule already refused; and treating
+a type change as delete and create, rejected because the object loses its ID
+and anything referencing it, and a DNS name falls through to whatever wildcard
+covers it until the create lands. The cost is that a type change must declare
+the whole new object, which the console enforces with a 400 on a missing
+required field, so the failure is loud.
